@@ -1,31 +1,37 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import SongCard from "@/components/SongCard";
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-music.jpg";
+import { useNavigate } from "react-router-dom";
+import { auth } from "@/integrations/firebase/client";
+import { songs } from "@/lib/songs";
+import MusicPlayer from "@/components/MusicPlayer";
 
 const Home = () => {
   const [likedSongs, setLikedSongs] = useState<Set<number>>(new Set());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentSong, setCurrentSong] = useState(null);
+  const navigate = useNavigate();
 
-  const featuredSongs = [
-    { id: 1, title: "Midnight Vibes", artist: "Luna Wave", duration: "3:45", color: "from-purple-600 to-pink-600" },
-    { id: 2, title: "Electric Dreams", artist: "Neon Pulse", duration: "4:12", color: "from-blue-600 to-purple-600" },
-    { id: 3, title: "Summer Breeze", artist: "Sky Harmony", duration: "3:28", color: "from-green-600 to-teal-600" },
-    { id: 4, title: "Urban Rhythm", artist: "City Beats", duration: "3:56", color: "from-orange-600 to-red-600" },
-    { id: 5, title: "Ocean Waves", artist: "Aqua Sound", duration: "4:03", color: "from-cyan-600 to-blue-600" },
-    { id: 6, title: "Sunset Glow", artist: "Golden Hour", duration: "3:33", color: "from-yellow-600 to-orange-600" },
-  ];
-
-  const toggleLike = (id: number) => {
+  const toggleLike = (index: number) => {
     setLikedSongs(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
+      if (newSet.has(index)) {
+        newSet.delete(index);
       } else {
-        newSet.add(id);
+        newSet.add(index);
       }
       return newSet;
     });
   };
+
+  // Check authentication state
+  React.useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   return (
     <div className="min-h-screen pb-32">
@@ -40,6 +46,13 @@ const Home = () => {
       >
         <div className="absolute inset-0 gradient-hero opacity-80"></div>
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
+          {/* Show Login/Signup buttons if not authenticated */}
+          {!isAuthenticated && (
+            <div className="absolute top-8 right-8 flex gap-4">
+              <Button variant="outline" onClick={() => navigate("/login")}>Login</Button>
+              <Button variant="secondary" onClick={() => navigate("/signup")}>Sign Up</Button>
+            </div>
+          )}
           <h1 className="text-5xl md:text-7xl font-bold mb-4 text-white">
             Your Music, Your Way
           </h1>
@@ -59,16 +72,16 @@ const Home = () => {
           <Button variant="ghost">View All</Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {featuredSongs.map((song) => (
+          {songs.map((song, idx) => (
             <SongCard
-              key={song.id}
-              title={song.title}
+              key={idx}
+              title={song.name}
               artist={song.artist}
-              duration={song.duration}
-              coverColor={song.color}
-              isLiked={likedSongs.has(song.id)}
-              onLike={() => toggleLike(song.id)}
-              onPlay={() => console.log(`Playing ${song.title}`)}
+              duration={""}
+              coverColor={"from-purple-600 to-pink-600"}
+              isLiked={likedSongs.has(idx)}
+              onLike={() => toggleLike(idx)}
+              onPlay={() => setCurrentSong(song)}
             />
           ))}
         </div>
@@ -125,6 +138,8 @@ const Home = () => {
           ))}
         </div>
       </section>
+      {/* Music Player for selected song */}
+      <MusicPlayer song={currentSong ? { title: currentSong.name, artist: currentSong.artist, audioUrl: currentSong.url } : undefined} />
     </div>
   );
 };

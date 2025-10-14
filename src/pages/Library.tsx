@@ -12,6 +12,12 @@ const Library = () => {
     { id: 2, title: "Neon Nights", artist: "Cyber Wave", duration: "3:55", color: "from-pink-500 to-purple-500" },
     { id: 3, title: "Paradise", artist: "Island Groove", duration: "3:42", color: "from-green-500 to-teal-500" },
     { id: 4, title: "Thunder", artist: "Storm Chasers", duration: "4:08", color: "from-gray-500 to-blue-500" },
+    { id: 5, title: "Sunset Drive", artist: "Night Riders", duration: "3:58", color: "gradient-sunset" },
+    { id: 6, title: "Ocean Eyes", artist: "Blue Horizon", duration: "4:12", color: "gradient-ocean" },
+    { id: 7, title: "Midnight City", artist: "Synthwave", duration: "3:50", color: "from-indigo-500 to-purple-500" },
+    { id: 8, title: "Golden Hour", artist: "Aurora", duration: "4:05", color: "from-yellow-400 to-orange-500" },
+    { id: 9, title: "Dreamscape", artist: "Skyline", duration: "3:47", color: "from-blue-400 to-cyan-400" },
+    { id: 10, title: "Firefly", artist: "Luminous", duration: "3:33", color: "from-orange-400 to-pink-500" },
   ];
 
   return (

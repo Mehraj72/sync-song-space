@@ -1,16 +1,67 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Settings, Heart, Music, ListMusic } from "lucide-react";
+import { auth } from "@/integrations/firebase/client";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState({ username: "", email: "" });
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          const { db } = await import("@/integrations/firebase/client");
+          const { doc, getDoc } = await import("firebase/firestore");
+          const profileRef = doc(db, "users", firebaseUser.uid);
+          const profileSnap = await getDoc(profileRef);
+          if (profileSnap.exists()) {
+            setProfile({
+              username: profileSnap.data().username || "",
+              email: firebaseUser.email || ""
+            });
+          } else {
+            setProfile({ username: "", email: firebaseUser.email || "" });
+          }
+        } catch {
+          setProfile({ username: "", email: firebaseUser.email || "" });
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const stats = [
     { label: "Liked Songs", value: "234", icon: Heart },
     { label: "Playlists", value: "12", icon: ListMusic },
     { label: "Artists", value: "87", icon: Music },
   ];
+
+  const handleEdit = () => {
+    setEditUsername(profile.username);
+    setEditEmail(profile.email);
+    setEditOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    try {
+      const { db } = await import("@/integrations/firebase/client");
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const profileRef = doc(db, "users", user.uid);
+      await updateDoc(profileRef, { username: editUsername });
+      setProfile({ username: editUsername, email: editEmail });
+      setEditOpen(false);
+    } catch (err) {
+      alert("Failed to update profile");
+    }
+  };
 
   return (
     <div className="min-h-screen pb-32">
@@ -22,15 +73,14 @@ const Profile = () => {
               👤
             </div>
             <div>
-              <h1 className="text-4xl font-bold mb-2">Music Lover</h1>
-              <p className="text-muted-foreground">member@vibestream.com</p>
-              <Button variant="outline" className="mt-4 gap-2">
+              <h1 className="text-4xl font-bold mb-2">{profile.username || "Music Lover"}</h1>
+              <p className="text-muted-foreground">{profile.email}</p>
+              <Button variant="outline" className="mt-4 gap-2" onClick={handleEdit}>
                 <Settings className="w-4 h-4" />
                 Edit Profile
               </Button>
             </div>
           </div>
-
           <div className="grid grid-cols-3 gap-4">
             {stats.map((stat) => {
               const Icon = stat.icon;
@@ -44,6 +94,34 @@ const Profile = () => {
             })}
           </div>
         </div>
+        {/* Edit Profile Modal */}
+        {editOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-background rounded-xl p-8 card-shadow w-full max-w-md">
+              <h2 className="text-2xl font-bold mb-4">Edit Profile</h2>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Username</label>
+                <input
+                  className="w-full p-2 rounded border"
+                  value={editUsername}
+                  onChange={e => setEditUsername(e.target.value)}
+                />
+              </div>
+              <div className="mb-6">
+                <label className="block mb-1 font-medium">Email</label>
+                <input
+                  className="w-full p-2 rounded border bg-muted-foreground/10"
+                  value={editEmail}
+                  disabled
+                />
+              </div>
+              <div className="flex gap-4">
+                <Button variant="secondary" onClick={handleSave}>Save</Button>
+                <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recently Played */}
         <Card className="gradient-card p-6 card-shadow mb-8">
@@ -79,7 +157,10 @@ const Profile = () => {
           <Button 
             variant="outline" 
             className="flex-1 gap-2"
-            onClick={() => navigate('/auth')}
+            onClick={async () => {
+              await auth.signOut();
+              navigate('/signup');
+            }}
           >
             <LogOut className="w-4 h-4" />
             Sign Out
