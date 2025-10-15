@@ -8,27 +8,93 @@ import { songs } from "@/lib/songs";
 import MusicPlayer from "@/components/MusicPlayer";
 
 const Home = () => {
-  const [likedSongs, setLikedSongs] = useState<Set<number>>(new Set());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [likedSongsSet, setLikedSongsSet] = useState<Set<string>>(new Set());
   const [currentSong, setCurrentSong] = useState(null);
   const navigate = useNavigate();
 
-  const toggleLike = (index: number) => {
-    setLikedSongs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
+  // handle play: set current song and add to user's recentlyPlayed
+  const handlePlay = async (song: any) => {
+    setCurrentSong(song);
+    if (!user) return;
+    try {
+      const { db } = await import("@/integrations/firebase/client");
+      const { doc, getDoc, updateDoc, setDoc } = await import("firebase/firestore");
+      const profileRef = doc(db, "users", user.uid);
+      const profileSnap = await getDoc(profileRef);
+      let existing: any[] = [];
+      if (profileSnap.exists()) existing = profileSnap.data().recentlyPlayed || [];
+      const songObj = { title: song.name, artist: song.artist, url: song.url, playedAt: Date.now() };
+      // remove duplicates by url
+      const filtered = existing.filter((s: any) => s.url !== songObj.url);
+      const updated = [songObj, ...filtered].slice(0, 50);
+      if (profileSnap.exists()) {
+        await updateDoc(profileRef, { recentlyPlayed: updated });
       } else {
-        newSet.add(index);
+        await setDoc(profileRef, { recentlyPlayed: updated }, { merge: true });
       }
-      return newSet;
+    } catch (err) {
+      console.error("Failed to update recentlyPlayed", err);
+    }
+  };
+
+  // handle toggle like: add/remove song in user's likedSongs
+  const handleToggleLike = async (song: any, index: number) => {
+    // optimistic UI update using url key
+    setLikedSongsSet(prev => {
+      const next = new Set(prev);
+      const key = song.url || song.name || String(index);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
     });
+
+    if (!user) return;
+    try {
+      const { db } = await import("@/integrations/firebase/client");
+      const { doc, getDoc, updateDoc, setDoc } = await import("firebase/firestore");
+      const profileRef = doc(db, "users", user.uid);
+      const profileSnap = await getDoc(profileRef);
+      let existing: any[] = [];
+      if (profileSnap.exists()) existing = profileSnap.data().likedSongs || [];
+      const key = song.url || song.name || String(index);
+      const exists = existing.find((s: any) => (s.url || s.name) === key);
+      if (exists) {
+        const filtered = existing.filter((s: any) => (s.url || s.name) !== key);
+        await updateDoc(profileRef, { likedSongs: filtered });
+      } else {
+        const songObj = { title: song.name, artist: song.artist, url: song.url };
+        const updated = [songObj, ...existing];
+        if (profileSnap.exists()) await updateDoc(profileRef, { likedSongs: updated });
+        else await setDoc(profileRef, { likedSongs: updated }, { merge: true });
+      }
+    } catch (err) {
+      console.error("Failed to toggle like", err);
+    }
   };
 
   // Check authentication state
   React.useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setIsAuthenticated(!!user);
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      setIsAuthenticated(!!u);
+      setUser(u);
+      if (u) {
+        try {
+          const { db } = await import("@/integrations/firebase/client");
+          const { doc, getDoc } = await import("firebase/firestore");
+          const profileRef = doc(db, "users", u.uid);
+          const profileSnap = await getDoc(profileRef);
+          if (profileSnap.exists()) {
+            const data = profileSnap.data();
+            const liked = new Set<string>((data.likedSongs || []).map((s: any) => String(s.url || s.name || s)));
+            setLikedSongsSet(liked);
+          }
+        } catch (err) {
+          console.error("Failed to load user preferences", err);
+        }
+      } else {
+        setLikedSongsSet(new Set());
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -79,9 +145,9 @@ const Home = () => {
               artist={song.artist}
               duration={""}
               coverColor={"from-purple-600 to-pink-600"}
-              isLiked={likedSongs.has(idx)}
-              onLike={() => toggleLike(idx)}
-              onPlay={() => setCurrentSong(song)}
+              isLiked={likedSongsSet.has(song.url || song.name || String(idx))}
+              onLike={() => handleToggleLike(song, idx)}
+              onPlay={() => handlePlay(song)}
             />
           ))}
         </div>

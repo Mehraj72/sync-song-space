@@ -1,32 +1,50 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { auth, db } from "@/integrations/firebase/client";
+import { collection, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 const Playlists = () => {
-  const [playlists, setPlaylists] = useState([
-    { id: 1, name: "My Favorites", count: 45, color: "from-purple-600 to-pink-600" },
-    { id: 2, name: "Workout Mix", count: 32, color: "from-red-600 to-orange-600" },
-    { id: 3, name: "Chill Sessions", count: 28, color: "from-blue-600 to-cyan-600" },
-    { id: 4, name: "Party Vibes", count: 51, color: "from-green-600 to-teal-600" },
-  ]);
+  const [playlists, setPlaylists] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
 
-  const handleCreate = () => {
-    if (!newName.trim()) return;
-    setPlaylists([
-      ...playlists,
-      {
-        id: playlists.length + 1,
-        name: newName,
-        count: 0,
-        color: "from-purple-600 to-pink-600"
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setPlaylists([]);
+        return;
       }
-    ]);
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          setPlaylists(data.playlists || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    const newPlaylist = { id: Date.now(), name: newName, count: 0, color: "from-purple-600 to-pink-600" };
+    setPlaylists(prev => [...prev, newPlaylist]);
     setNewName("");
     setModalOpen(false);
+    const user = auth.currentUser;
+    if (!user) return;
+    const userRef = doc(db, "users", user.uid);
+    try {
+      await updateDoc(userRef, { playlists: [...playlists, newPlaylist] });
+    } catch (err) {
+      // If user doc doesn't have playlists yet, set it
+      await setDoc(userRef, { playlists: [newPlaylist] }, { merge: true });
+    }
   };
 
   return (
@@ -71,19 +89,6 @@ const Playlists = () => {
         </div>
       )}
 
-      {/* Collaborative Playlists Section */}
-      <div className="mt-12">
-        <h2 className="text-3xl font-bold mb-6">Shared with You</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="gradient-card rounded-xl p-6 card-shadow transition-smooth hover:scale-105 cursor-pointer">
-            <div className="w-full aspect-square rounded-lg mb-4 bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
-              <p className="text-6xl">🎵</p>
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Road Trip 2024</h3>
-            <p className="text-muted-foreground">Shared by Alex • 38 songs</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

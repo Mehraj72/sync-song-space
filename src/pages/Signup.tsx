@@ -21,12 +21,17 @@ const Signup = () => {
       const { doc, setDoc } = await import("firebase/firestore");
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      // Store user profile in Firestore
+      // Store user profile + empty arrays in Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         username,
         email,
         role,
+        playlists: [],
+        likedSongs: [],
+        recentlyPlayed: [],
+        savedLyrics: [],
+        artists: []
       });
       toast({ title: `Welcome, ${username} 🎵` });
       setLoading(false);

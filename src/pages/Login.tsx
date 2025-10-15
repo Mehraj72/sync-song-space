@@ -39,11 +39,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center gradient-hero relative">
-      <div className="absolute top-8 right-8 flex gap-4">
-        <Button variant="outline" onClick={() => navigate("/login")}>Login</Button>
-        <Button variant="secondary" onClick={() => navigate("/signup")}>Sign Up</Button>
-      </div>
+    <div className="min-h-screen flex items-center justify-center gradient-hero">
       <form
         onSubmit={handleLogin}
         className="glass-effect p-8 rounded-xl shadow-xl w-full max-w-md border border-border"

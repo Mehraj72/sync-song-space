@@ -12,6 +12,11 @@ const Profile = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [likedSongs, setLikedSongs] = useState<any[]>([]);
+  const [userPlaylists, setUserPlaylists] = useState<any[]>([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<any[]>([]);
+  const [savedLyrics, setSavedLyrics] = useState<any[]>([]);
+  const [artists, setArtists] = useState<any[]>([]);
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
@@ -22,10 +27,16 @@ const Profile = () => {
           const profileRef = doc(db, "users", firebaseUser.uid);
           const profileSnap = await getDoc(profileRef);
           if (profileSnap.exists()) {
+            const data = profileSnap.data();
             setProfile({
-              username: profileSnap.data().username || "",
+              username: data.username || "",
               email: firebaseUser.email || ""
             });
+            setLikedSongs(data.likedSongs || []);
+            setUserPlaylists(data.playlists || []);
+            setRecentlyPlayed(data.recentlyPlayed || []);
+            setSavedLyrics(data.savedLyrics || []);
+            setArtists(data.artists || []);
           } else {
             setProfile({ username: "", email: firebaseUser.email || "" });
           }
@@ -38,9 +49,9 @@ const Profile = () => {
   }, []);
 
   const stats = [
-    { label: "Liked Songs", value: "234", icon: Heart },
-    { label: "Playlists", value: "12", icon: ListMusic },
-    { label: "Artists", value: "87", icon: Music },
+    { label: "Liked Songs", value: likedSongs.length.toString(), icon: Heart },
+    { label: "Playlists", value: userPlaylists.length.toString(), icon: ListMusic },
+    { label: "Artists", value: artists.length.toString(), icon: Music },
   ];
 
   const handleEdit = () => {
@@ -127,16 +138,25 @@ const Profile = () => {
         <Card className="gradient-card p-6 card-shadow mb-8">
           <h2 className="text-2xl font-bold mb-4">Recently Played</h2>
           <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-4 p-3 rounded-lg hover:bg-primary/10 transition-smooth cursor-pointer">
-                <div className="w-12 h-12 rounded bg-gradient-to-br from-purple-500 to-pink-500"></div>
-                <div className="flex-1">
-                  <p className="font-semibold">Song Title {i}</p>
-                  <p className="text-sm text-muted-foreground">Artist Name</p>
-                </div>
-                <p className="text-sm text-muted-foreground">3:45</p>
-              </div>
-            ))}
+            {recentlyPlayed.length === 0 ? (
+              <p className="text-muted-foreground">You haven't played any songs yet.</p>
+            ) : (
+              recentlyPlayed.map((item, idx) => {
+                const title = item?.title || item?.name || item || `Song ${idx + 1}`;
+                const artist = item?.artist || item?.album || "Unknown Artist";
+                const duration = item?.duration || "-:--";
+                return (
+                  <div key={idx} className="flex items-center gap-4 p-3 rounded-lg hover:bg-primary/10 transition-smooth cursor-pointer">
+                    <div className="w-12 h-12 rounded bg-gradient-to-br from-purple-500 to-pink-500"></div>
+                    <div className="flex-1">
+                      <p className="font-semibold">{title}</p>
+                      <p className="text-sm text-muted-foreground">{artist}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{duration}</p>
+                  </div>
+                );
+              })
+            )}
           </div>
         </Card>
 
@@ -145,11 +165,56 @@ const Profile = () => {
           <h2 className="text-2xl font-bold mb-4">Saved Lyrics</h2>
           <p className="text-muted-foreground mb-4">Your favorite lyrics will be saved here</p>
           <div className="space-y-4">
-            <div className="glass-effect rounded-lg p-4">
-              <p className="italic mb-2">"And I can see us lost in the memory..."</p>
-              <p className="text-sm text-muted-foreground">August - Taylor Swift</p>
-            </div>
+            {savedLyrics.length === 0 ? (
+              <p className="text-muted-foreground">You have no saved lyrics yet.</p>
+            ) : (
+              savedLyrics.map((lyric, idx) => (
+                <div key={idx} className="glass-effect rounded-lg p-4">
+                  <p className="italic mb-2">{lyric?.text || lyric?.snippet || lyric || '"(lyrics snippet)"'}</p>
+                  <p className="text-sm text-muted-foreground">{lyric?.song || lyric?.title || ''} {lyric?.artist ? `- ${lyric.artist}` : ''}</p>
+                </div>
+              ))
+            )}
           </div>
+        </Card>
+
+        {/* Playlists */}
+        <Card className="gradient-card p-6 card-shadow mb-8">
+          <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
+          {userPlaylists.length === 0 ? (
+            <p className="text-muted-foreground">You haven't created any playlists yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {userPlaylists.map((pl, i) => (
+                <div key={pl.id || i} className="flex items-center justify-between p-3 rounded-lg hover:bg-primary/10">
+                  <div>
+                    <p className="font-semibold">{pl.title || pl.name || `Playlist ${i + 1}`}</p>
+                    <p className="text-sm text-muted-foreground">{(pl.songs && pl.songs.length) ? `${pl.songs.length} songs` : '0 songs'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Liked Songs */}
+        <Card className="gradient-card p-6 card-shadow mb-8">
+          <h2 className="text-2xl font-bold mb-4">Liked Songs</h2>
+          {likedSongs.length === 0 ? (
+            <p className="text-muted-foreground">You haven't liked any songs yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {likedSongs.map((s, i) => (
+                <div key={s.id || i} className="flex items-center gap-4 p-3 rounded-lg hover:bg-primary/10">
+                  <div className="w-12 h-12 rounded bg-gradient-to-br from-emerald-400 to-teal-500"></div>
+                  <div className="flex-1">
+                    <p className="font-semibold">{s.title || s.name || `Song ${i + 1}`}</p>
+                    <p className="text-sm text-muted-foreground">{s.artist || s.album || 'Unknown Artist'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Actions */}
