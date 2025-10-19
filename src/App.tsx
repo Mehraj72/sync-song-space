@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Library from "./pages/Library";
+import SpotifyCallback from "./pages/SpotifyCallback";
 import Playlists from "./pages/Playlists";
 import Profile from "./pages/Profile";
 import Admin from "./pages/Admin";
@@ -77,6 +78,7 @@ const App = () => {
               <Route path="/" element={<Navigate to="/dashboard" />} />
               <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
               <Route path="/library" element={<Layout><Library /></Layout>} />
+              <Route path="/callback" element={<SpotifyCallback />} />
               <Route path="/playlists" element={<Layout><Playlists /></Layout>} />
               <Route path="/profile" element={<Layout><Profile /></Layout>} />
               <Route path="*" element={<NotFound />} />
@@ -86,6 +88,7 @@ const App = () => {
               <Route path="/" element={<Navigate to="/admin-dashboard" />} />
               <Route path="/admin-dashboard" element={<Layout><AdminDashboard /></Layout>} />
               <Route path="/admin" element={<Layout><Admin /></Layout>} />
+              <Route path="/callback" element={<SpotifyCallback />} />
               <Route path="/profile" element={<Layout><Profile /></Layout>} />
               <Route path="*" element={<NotFound />} />
             </>}

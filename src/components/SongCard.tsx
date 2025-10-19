@@ -7,6 +7,7 @@ interface SongCardProps {
   artist: string;
   duration?: string;
   coverColor?: string;
+  imageUrl?: string;
   isLiked?: boolean;
   onPlay?: () => void;
   onLike?: () => void;
@@ -17,13 +18,20 @@ const SongCard = ({
   artist, 
   duration = "3:45",
   coverColor = "from-purple-500 to-pink-500",
+  imageUrl,
   isLiked = false,
   onPlay,
   onLike 
 }: SongCardProps) => {
   return (
     <div className="group relative gradient-card rounded-xl p-4 card-shadow transition-smooth hover:scale-105 cursor-pointer">
-      <div className={cn("w-full aspect-square rounded-lg mb-4 bg-gradient-to-br", coverColor)}></div>
+      {imageUrl ? (
+        <div className="w-full aspect-square rounded-lg mb-4 overflow-hidden">
+          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className={cn("w-full aspect-square rounded-lg mb-4 bg-gradient-to-br", coverColor)}></div>
+      )}
       
       <h3 className="font-semibold text-foreground mb-1 truncate">{title}</h3>
       <p className="text-sm text-muted-foreground truncate">{artist}</p>
