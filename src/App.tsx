@@ -17,42 +17,61 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import { useEffect, useState } from "react";
-import { auth } from "@/integrations/firebase/client";
-
+import { supabase } from "@/integrations/supabase/client";
+import { User } from "@supabase/supabase-js";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      setLoading(true);
-      if (firebaseUser) {
-        // Fetch user role from Firestore
-        try {
-          const { db } = await import("@/integrations/firebase/client");
-          const { doc, getDoc } = await import("firebase/firestore");
-          const profileRef = doc(db, "users", firebaseUser.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            setRole(profileSnap.data().role || "user");
-          } else {
-            setRole("user");
-          }
-        } catch {
-          setRole("user");
+    // Set up auth state listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Fetch user role
+          setTimeout(async () => {
+            const { data: roleData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
+              .single();
+            
+            setRole(roleData?.role || 'user');
+            setLoading(false);
+          }, 0);
+        } else {
+          setRole('user');
+          setLoading(false);
         }
-        setUser(firebaseUser);
-      } else {
-        setUser(null);
-        setRole("user");
       }
-      setLoading(false);
+    );
+
+    // Then check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data: roleData }) => {
+            setRole(roleData?.role || 'user');
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
+      }
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {

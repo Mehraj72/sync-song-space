@@ -3,100 +3,128 @@ import SongCard from "@/components/SongCard";
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-music.jpg";
 import { useNavigate } from "react-router-dom";
-import { auth } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { songs } from "@/lib/songs";
 import MusicPlayer from "@/components/MusicPlayer";
 
 const Home = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [likedSongsSet, setLikedSongsSet] = useState<Set<string>>(new Set());
   const [currentSong, setCurrentSong] = useState(null);
   const navigate = useNavigate();
 
-  // handle play: set current song and add to user's recentlyPlayed
+  // handle play: set current song and add to user's listening history
   const handlePlay = async (song: any) => {
     setCurrentSong(song);
-    if (!user) return;
+    if (!userId) return;
+    
     try {
-      const { db } = await import("@/integrations/firebase/client");
-      const { doc, getDoc, updateDoc, setDoc } = await import("firebase/firestore");
-      const profileRef = doc(db, "users", user.uid);
-      const profileSnap = await getDoc(profileRef);
-      let existing: any[] = [];
-      if (profileSnap.exists()) existing = profileSnap.data().recentlyPlayed || [];
-      const songObj = { title: song.name, artist: song.artist, url: song.url, playedAt: Date.now() };
-      // remove duplicates by url
-      const filtered = existing.filter((s: any) => s.url !== songObj.url);
-      const updated = [songObj, ...filtered].slice(0, 50);
-      if (profileSnap.exists()) {
-        await updateDoc(profileRef, { recentlyPlayed: updated });
-      } else {
-        await setDoc(profileRef, { recentlyPlayed: updated }, { merge: true });
-      }
+      // Add to listening history (you'll need to create this table if needed)
+      await supabase.from('listening_history').insert({
+        user_id: userId,
+        song_id: song.id, // Adjust based on your song structure
+        played_at: new Date().toISOString(),
+      });
     } catch (err) {
-      console.error("Failed to update recentlyPlayed", err);
+      console.error("Failed to update listening history", err);
     }
   };
 
-  // handle toggle like: add/remove song in user's likedSongs
+  // handle toggle like: add/remove song in user's liked songs
   const handleToggleLike = async (song: any, index: number) => {
-    // optimistic UI update using url key
+    const key = song.url || song.name || String(index);
+    
+    // Optimistic UI update
     setLikedSongsSet(prev => {
       const next = new Set(prev);
-      const key = song.url || song.name || String(index);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key); 
+      else next.add(key);
       return next;
     });
 
-    if (!user) return;
+    if (!userId) return;
+    
     try {
-      const { db } = await import("@/integrations/firebase/client");
-      const { doc, getDoc, updateDoc, setDoc } = await import("firebase/firestore");
-      const profileRef = doc(db, "users", user.uid);
-      const profileSnap = await getDoc(profileRef);
-      let existing: any[] = [];
-      if (profileSnap.exists()) existing = profileSnap.data().likedSongs || [];
-      const key = song.url || song.name || String(index);
-      const exists = existing.find((s: any) => (s.url || s.name) === key);
-      if (exists) {
-        const filtered = existing.filter((s: any) => (s.url || s.name) !== key);
-        await updateDoc(profileRef, { likedSongs: filtered });
+      // Check if already liked
+      const { data: existingLike } = await supabase
+        .from('user_likes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('song_id', song.id) // Adjust based on your song structure
+        .maybeSingle();
+
+      if (existingLike) {
+        // Unlike
+        await supabase
+          .from('user_likes')
+          .delete()
+          .eq('id', existingLike.id);
       } else {
-        const songObj = { title: song.name, artist: song.artist, url: song.url };
-        const updated = [songObj, ...existing];
-        if (profileSnap.exists()) await updateDoc(profileRef, { likedSongs: updated });
-        else await setDoc(profileRef, { likedSongs: updated }, { merge: true });
+        // Like
+        await supabase
+          .from('user_likes')
+          .insert({
+            user_id: userId,
+            song_id: song.id, // Adjust based on your song structure
+          });
       }
     } catch (err) {
       console.error("Failed to toggle like", err);
+      // Revert optimistic update on error
+      setLikedSongsSet(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); 
+        else next.add(key);
+        return next;
+      });
     }
   };
 
   // Check authentication state
   React.useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (u) => {
-      setIsAuthenticated(!!u);
-      setUser(u);
-      if (u) {
-        try {
-          const { db } = await import("@/integrations/firebase/client");
-          const { doc, getDoc } = await import("firebase/firestore");
-          const profileRef = doc(db, "users", u.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            const data = profileSnap.data();
-            const liked = new Set<string>((data.likedSongs || []).map((s: any) => String(s.url || s.name || s)));
-            setLikedSongsSet(liked);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setIsAuthenticated(!!session?.user);
+        setUserId(session?.user?.id || null);
+        
+        if (session?.user) {
+          // Load user's liked songs
+          const { data: likes } = await supabase
+            .from('user_likes')
+            .select('song_id')
+            .eq('user_id', session.user.id);
+
+          if (likes) {
+            const likedSet = new Set<string>(likes.map(like => String(like.song_id)));
+            setLikedSongsSet(likedSet);
           }
-        } catch (err) {
-          console.error("Failed to load user preferences", err);
+        } else {
+          setLikedSongsSet(new Set());
         }
-      } else {
-        setLikedSongsSet(new Set());
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session?.user);
+      setUserId(session?.user?.id || null);
+      
+      if (session?.user) {
+        supabase
+          .from('user_likes')
+          .select('song_id')
+          .eq('user_id', session.user.id)
+          .then(({ data: likes }) => {
+            if (likes) {
+              const likedSet = new Set<string>(likes.map(like => String(like.song_id)));
+              setLikedSongsSet(likedSet);
+            }
+          });
       }
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, []);
 
   return (

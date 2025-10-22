@@ -3,42 +3,61 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [role, setRole] = useState("user");
+  const [role, setRole] = useState<'user' | 'admin'>("user");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
-      const { auth, db } = await import("@/integrations/firebase/client");
-      const { createUserWithEmailAndPassword } = await import("firebase/auth");
-      const { doc, setDoc } = await import("firebase/firestore");
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      // Store user profile + empty arrays in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        username,
+      // Sign up the user
+      const { data, error } = await supabase.auth.signUp({
         email,
-        role,
-        playlists: [],
-        likedSongs: [],
-        recentlyPlayed: [],
-        savedLyrics: [],
-        artists: []
+        password,
+        options: {
+          data: {
+            username,
+          },
+          emailRedirectTo: `${window.location.origin}/`,
+        },
       });
-      toast({ title: `Welcome, ${username} 🎵` });
+
+      if (error) throw error;
+
+      if (!data.user) {
+        throw new Error("Failed to create user");
+      }
+
+      // Assign role if admin (user role is automatically assigned by trigger)
+      if (role === 'admin') {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({ user_id: data.user.id, role: 'admin' });
+        
+        if (roleError) console.error('Role assignment error:', roleError);
+      }
+
+      toast({ 
+        title: `Welcome, ${username} 🎵`,
+        description: "Your account has been created successfully!"
+      });
       setLoading(false);
       navigate(role === "admin" ? "/admin-dashboard" : "/dashboard");
     } catch (err: any) {
       setLoading(false);
-      toast({ title: "Signup failed", description: err.message, variant: "destructive" });
+      toast({ 
+        title: "Signup failed", 
+        description: err.message || "Unable to create account", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -84,7 +103,7 @@ const Signup = () => {
           <label className="block mb-2 font-semibold">Account Type</label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value)}
+            onChange={(e) => setRole(e.target.value as 'user' | 'admin')}
             className="w-full p-2 rounded-lg bg-muted text-foreground"
           >
             <option value="user">User</option>

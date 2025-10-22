@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || 'eb4ce04e364f412ba87e892ffc404820';
+const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || '6c1e293c7ec545cd853ee273ded218e1';
 const REDIRECT_URI = `${window.location.origin}/callback`;
 const SCOPES = [
   'streaming',

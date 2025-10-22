@@ -3,75 +3,112 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Settings, Heart, Music, ListMusic } from "lucide-react";
-import { auth } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState({ username: "", email: "" });
   const [editOpen, setEditOpen] = useState(false);
   const [editUsername, setEditUsername] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [likedSongs, setLikedSongs] = useState<any[]>([]);
-  const [userPlaylists, setUserPlaylists] = useState<any[]>([]);
-  const [recentlyPlayed, setRecentlyPlayed] = useState<any[]>([]);
-  const [savedLyrics, setSavedLyrics] = useState<any[]>([]);
-  const [artists, setArtists] = useState<any[]>([]);
+  const [likedCount, setLikedCount] = useState(0);
+  const [playlistsCount, setPlaylistsCount] = useState(0);
+  const [historyCount, setHistoryCount] = useState(0);
+
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        try {
-          const { db } = await import("@/integrations/firebase/client");
-          const { doc, getDoc } = await import("firebase/firestore");
-          const profileRef = doc(db, "users", firebaseUser.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            const data = profileSnap.data();
-            setProfile({
-              username: data.username || "",
-              email: firebaseUser.email || ""
-            });
-            setLikedSongs(data.likedSongs || []);
-            setUserPlaylists(data.playlists || []);
-            setRecentlyPlayed(data.recentlyPlayed || []);
-            setSavedLyrics(data.savedLyrics || []);
-            setArtists(data.artists || []);
-          } else {
-            setProfile({ username: "", email: firebaseUser.email || "" });
-          }
-        } catch {
-          setProfile({ username: "", email: firebaseUser.email || "" });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUserId(session.user.id);
+          loadProfile(session.user.id, session.user.email || '');
+        } else {
+          setUserId(null);
+          setProfile({ username: "", email: "" });
         }
       }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        loadProfile(session.user.id, session.user.email || '');
+      }
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  const loadProfile = async (uid: string, email: string) => {
+    try {
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('user_id', uid)
+        .single();
+
+      setProfile({
+        username: profileData?.username || "",
+        email: email
+      });
+
+      // Load stats
+      const { count: likeCount } = await supabase
+        .from('user_likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid);
+
+      const { count: playlistCount } = await supabase
+        .from('playlists')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid);
+
+      const { count: histCount } = await supabase
+        .from('listening_history')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid);
+
+      setLikedCount(likeCount || 0);
+      setPlaylistsCount(playlistCount || 0);
+      setHistoryCount(histCount || 0);
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+    }
+  };
+
   const stats = [
-    { label: "Liked Songs", value: likedSongs.length.toString(), icon: Heart },
-    { label: "Playlists", value: userPlaylists.length.toString(), icon: ListMusic },
-    { label: "Artists", value: artists.length.toString(), icon: Music },
+    { label: "Liked Songs", value: likedCount.toString(), icon: Heart },
+    { label: "Playlists", value: playlistsCount.toString(), icon: ListMusic },
+    { label: "Played", value: historyCount.toString(), icon: Music },
   ];
 
   const handleEdit = () => {
     setEditUsername(profile.username);
-    setEditEmail(profile.email);
     setEditOpen(true);
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!userId) return;
+    
     try {
-      const { db } = await import("@/integrations/firebase/client");
-      const { doc, updateDoc } = await import("firebase/firestore");
-      const profileRef = doc(db, "users", user.uid);
-      await updateDoc(profileRef, { username: editUsername });
-      setProfile({ username: editUsername, email: editEmail });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username: editUsername })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setProfile({ ...profile, username: editUsername });
       setEditOpen(false);
     } catch (err) {
-      alert("Failed to update profile");
+      console.error('Failed to update profile:', err);
     }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
   };
 
   return (
@@ -105,6 +142,7 @@ const Profile = () => {
             })}
           </div>
         </div>
+
         {/* Edit Profile Modal */}
         {editOpen && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -118,14 +156,6 @@ const Profile = () => {
                   onChange={e => setEditUsername(e.target.value)}
                 />
               </div>
-              <div className="mb-6">
-                <label className="block mb-1 font-medium">Email</label>
-                <input
-                  className="w-full p-2 rounded border bg-muted-foreground/10"
-                  value={editEmail}
-                  disabled
-                />
-              </div>
               <div className="flex gap-4">
                 <Button variant="secondary" onClick={handleSave}>Save</Button>
                 <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
@@ -134,98 +164,12 @@ const Profile = () => {
           </div>
         )}
 
-        {/* Recently Played */}
-        <Card className="gradient-card p-6 card-shadow mb-8">
-          <h2 className="text-2xl font-bold mb-4">Recently Played</h2>
-          <div className="space-y-3">
-            {recentlyPlayed.length === 0 ? (
-              <p className="text-muted-foreground">You haven't played any songs yet.</p>
-            ) : (
-              recentlyPlayed.map((item, idx) => {
-                const title = item?.title || item?.name || item || `Song ${idx + 1}`;
-                const artist = item?.artist || item?.album || "Unknown Artist";
-                const duration = item?.duration || "-:--";
-                return (
-                  <div key={idx} className="flex items-center gap-4 p-3 rounded-lg hover:bg-primary/10 transition-smooth cursor-pointer">
-                    <div className="w-12 h-12 rounded bg-gradient-to-br from-purple-500 to-pink-500"></div>
-                    <div className="flex-1">
-                      <p className="font-semibold">{title}</p>
-                      <p className="text-sm text-muted-foreground">{artist}</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{duration}</p>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
-
-        {/* Lyric Book */}
-        <Card className="gradient-card p-6 card-shadow mb-8">
-          <h2 className="text-2xl font-bold mb-4">Saved Lyrics</h2>
-          <p className="text-muted-foreground mb-4">Your favorite lyrics will be saved here</p>
-          <div className="space-y-4">
-            {savedLyrics.length === 0 ? (
-              <p className="text-muted-foreground">You have no saved lyrics yet.</p>
-            ) : (
-              savedLyrics.map((lyric, idx) => (
-                <div key={idx} className="glass-effect rounded-lg p-4">
-                  <p className="italic mb-2">{lyric?.text || lyric?.snippet || lyric || '"(lyrics snippet)"'}</p>
-                  <p className="text-sm text-muted-foreground">{lyric?.song || lyric?.title || ''} {lyric?.artist ? `- ${lyric.artist}` : ''}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        {/* Playlists */}
-        <Card className="gradient-card p-6 card-shadow mb-8">
-          <h2 className="text-2xl font-bold mb-4">Your Playlists</h2>
-          {userPlaylists.length === 0 ? (
-            <p className="text-muted-foreground">You haven't created any playlists yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {userPlaylists.map((pl, i) => (
-                <div key={pl.id || i} className="flex items-center justify-between p-3 rounded-lg hover:bg-primary/10">
-                  <div>
-                    <p className="font-semibold">{pl.title || pl.name || `Playlist ${i + 1}`}</p>
-                    <p className="text-sm text-muted-foreground">{(pl.songs && pl.songs.length) ? `${pl.songs.length} songs` : '0 songs'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Liked Songs */}
-        <Card className="gradient-card p-6 card-shadow mb-8">
-          <h2 className="text-2xl font-bold mb-4">Liked Songs</h2>
-          {likedSongs.length === 0 ? (
-            <p className="text-muted-foreground">You haven't liked any songs yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {likedSongs.map((s, i) => (
-                <div key={s.id || i} className="flex items-center gap-4 p-3 rounded-lg hover:bg-primary/10">
-                  <div className="w-12 h-12 rounded bg-gradient-to-br from-emerald-400 to-teal-500"></div>
-                  <div className="flex-1">
-                    <p className="font-semibold">{s.title || s.name || `Song ${i + 1}`}</p>
-                    <p className="text-sm text-muted-foreground">{s.artist || s.album || 'Unknown Artist'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* Actions */}
         <div className="flex gap-4">
           <Button 
             variant="outline" 
             className="flex-1 gap-2"
-            onClick={async () => {
-              await auth.signOut();
-              navigate('/signup');
-            }}
+            onClick={handleSignOut}
           >
             <LogOut className="w-4 h-4" />
             Sign Out

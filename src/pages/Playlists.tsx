@@ -2,48 +2,73 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-import { auth, db } from "@/integrations/firebase/client";
-import { collection, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 
 const Playlists = () => {
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user) {
-        setPlaylists([]);
-        return;
-      }
-      try {
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setPlaylists(data.playlists || []);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUserId(session?.user?.id || null);
+        
+        if (session?.user) {
+          loadPlaylists(session.user.id);
+        } else {
+          setPlaylists([]);
         }
-      } catch (err) {
-        console.error(err);
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
+      if (session?.user) {
+        loadPlaylists(session.user.id);
       }
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
-    const newPlaylist = { id: Date.now(), name: newName, count: 0, color: "from-purple-600 to-pink-600" };
-    setPlaylists(prev => [...prev, newPlaylist]);
-    setNewName("");
-    setModalOpen(false);
-    const user = auth.currentUser;
-    if (!user) return;
-    const userRef = doc(db, "users", user.uid);
+  const loadPlaylists = async (uid: string) => {
     try {
-      await updateDoc(userRef, { playlists: [...playlists, newPlaylist] });
+      const { data, error } = await supabase
+        .from('playlists')
+        .select('*')
+        .eq('user_id', uid);
+
+      if (error) throw error;
+      setPlaylists(data || []);
     } catch (err) {
-      // If user doc doesn't have playlists yet, set it
-      await setDoc(userRef, { playlists: [newPlaylist] }, { merge: true });
+      console.error('Failed to load playlists:', err);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim() || !userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('playlists')
+        .insert({
+          user_id: userId,
+          name: newName,
+          cover_color: 'from-purple-600 to-pink-600',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setPlaylists(prev => [...prev, data]);
+      setNewName("");
+      setModalOpen(false);
+    } catch (err) {
+      console.error('Failed to create playlist:', err);
     }
   };
 
@@ -63,9 +88,9 @@ const Playlists = () => {
             key={playlist.id}
             className="gradient-card rounded-xl p-6 card-shadow transition-smooth hover:scale-105 cursor-pointer"
           >
-            <div className={cn("w-full aspect-square rounded-lg mb-4 bg-gradient-to-br", playlist.color)}></div>
+            <div className={cn("w-full aspect-square rounded-lg mb-4 bg-gradient-to-br", playlist.cover_color)}></div>
             <h3 className="text-xl font-semibold mb-2">{playlist.name}</h3>
-            <p className="text-muted-foreground">{playlist.count} songs</p>
+            <p className="text-muted-foreground">0 songs</p>
           </div>
         ))}
       </div>
@@ -88,7 +113,6 @@ const Playlists = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

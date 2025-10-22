@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -13,28 +14,42 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
-      const { auth, db } = await import("@/integrations/firebase/client");
-      const { signInWithEmailAndPassword } = await import("firebase/auth");
-      const { doc, getDoc } = await import("firebase/firestore");
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      // Fetch user profile from Firestore
-      const profileRef = doc(db, "users", user.uid);
-      const profileSnap = await getDoc(profileRef);
-      let role = "user";
-      let username = user.email;
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        role = data.role || "user";
-        username = data.username || user.email;
-      }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      // Fetch user role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', data.user.id)
+        .single();
+
+      // Fetch user profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('user_id', data.user.id)
+        .single();
+
+      const role = roleData?.role || 'user';
+      const username = profileData?.username || email;
+
       toast({ title: `Welcome, ${username} 🎵` });
       setLoading(false);
       navigate(role === "admin" ? "/admin-dashboard" : "/dashboard");
     } catch (err: any) {
       setLoading(false);
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+      toast({ 
+        title: "Login failed", 
+        description: err.message || "Invalid email or password", 
+        variant: "destructive" 
+      });
     }
   };
 

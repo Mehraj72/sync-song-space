@@ -1,9 +1,8 @@
 import { ReactNode } from "react";
 import Navigation from "./Navigation";
 import MusicPlayer from "./MusicPlayer";
-
 import { useEffect, useState } from "react";
-import { auth } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,27 +10,25 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const [role, setRole] = useState("user");
+  
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const { db } = await import("@/integrations/firebase/client");
-          const { doc, getDoc } = await import("firebase/firestore");
-          const profileRef = doc(db, "users", firebaseUser.uid);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            setRole(profileSnap.data().role || "user");
-          } else {
-            setRole("user");
-          }
-        } catch {
-          setRole("user");
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single();
+          
+          setRole(roleData?.role || 'user');
+        } else {
+          setRole('user');
         }
-      } else {
-        setRole("user");
       }
-    });
-    return () => unsubscribe();
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
   return (
     <div className="min-h-screen bg-background">
