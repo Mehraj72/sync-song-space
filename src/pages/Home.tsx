@@ -1,131 +1,129 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SongCard from "@/components/SongCard";
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-music.jpg";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { songs } from "@/lib/songs";
 import MusicPlayer from "@/components/MusicPlayer";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const Home = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [likedSongsSet, setLikedSongsSet] = useState<Set<string>>(new Set());
+  const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
   const [currentSong, setCurrentSong] = useState(null);
+  const [allSongs, setAllSongs] = useState<any[]>([]);
   const navigate = useNavigate();
 
-  // handle play: set current song and add to user's listening history
-  const handlePlay = async (song: any) => {
-    setCurrentSong(song);
-    if (!userId) return;
+  // Load songs and auth state
+  useEffect(() => {
+    loadSongs();
     
-    try {
-      // Add to listening history (you'll need to create this table if needed)
-      await supabase.from('listening_history').insert({
-        user_id: userId,
-        song_id: song.id, // Adjust based on your song structure
-        played_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error("Failed to update listening history", err);
-    }
-  };
-
-  // handle toggle like: add/remove song in user's liked songs
-  const handleToggleLike = async (song: any, index: number) => {
-    const key = song.url || song.name || String(index);
-    
-    // Optimistic UI update
-    setLikedSongsSet(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); 
-      else next.add(key);
-      return next;
-    });
-
-    if (!userId) return;
-    
-    try {
-      // Check if already liked
-      const { data: existingLike } = await supabase
-        .from('user_likes')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('song_id', song.id) // Adjust based on your song structure
-        .maybeSingle();
-
-      if (existingLike) {
-        // Unlike
-        await supabase
-          .from('user_likes')
-          .delete()
-          .eq('id', existingLike.id);
-      } else {
-        // Like
-        await supabase
-          .from('user_likes')
-          .insert({
-            user_id: userId,
-            song_id: song.id, // Adjust based on your song structure
-          });
-      }
-    } catch (err) {
-      console.error("Failed to toggle like", err);
-      // Revert optimistic update on error
-      setLikedSongsSet(prev => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key); 
-        else next.add(key);
-        return next;
-      });
-    }
-  };
-
-  // Check authentication state
-  React.useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setIsAuthenticated(!!session?.user);
         setUserId(session?.user?.id || null);
         
         if (session?.user) {
-          // Load user's liked songs
-          const { data: likes } = await supabase
-            .from('user_likes')
-            .select('song_id')
-            .eq('user_id', session.user.id);
-
-          if (likes) {
-            const likedSet = new Set<string>(likes.map(like => String(like.song_id)));
-            setLikedSongsSet(likedSet);
-          }
+          loadLikedSongs(session.user.id);
         } else {
-          setLikedSongsSet(new Set());
+          setLikedSongIds(new Set());
         }
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAuthenticated(!!session?.user);
       setUserId(session?.user?.id || null);
       
       if (session?.user) {
-        supabase
-          .from('user_likes')
-          .select('song_id')
-          .eq('user_id', session.user.id)
-          .then(({ data: likes }) => {
-            if (likes) {
-              const likedSet = new Set<string>(likes.map(like => String(like.song_id)));
-              setLikedSongsSet(likedSet);
-            }
-          });
+        loadLikedSongs(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadSongs = async () => {
+    const { data: songs } = await supabase
+      .from('songs')
+      .select(`
+        *,
+        artists:artist_id (name, image_url)
+      `)
+      .order('play_count', { ascending: false })
+      .limit(12);
+
+    setAllSongs(songs || []);
+  };
+
+  const loadLikedSongs = async (uid: string) => {
+    const { data: likes } = await supabase
+      .from('user_likes')
+      .select('song_id')
+      .eq('user_id', uid);
+
+    if (likes) {
+      setLikedSongIds(new Set(likes.map(like => like.song_id)));
+    }
+  };
+
+  const handlePlay = async (song: any) => {
+    setCurrentSong({
+      title: song.title,
+      artist: song.artists?.name || 'Unknown Artist',
+      audioUrl: song.file_url,
+      imageUrl: song.artists?.image_url,
+    });
+
+    if (userId) {
+      await supabase.from('listening_history').insert({
+        user_id: userId,
+        song_id: song.id,
+      });
+      
+      // Increment play count
+      await supabase.rpc('increment_play_count', { song_id_param: song.id });
+    }
+  };
+
+  const handleToggleLike = async (songId: string) => {
+    if (!userId) {
+      toast.error('Please login to like songs');
+      return;
+    }
+
+    const isLiked = likedSongIds.has(songId);
+
+    setLikedSongIds(prev => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(songId);
+      else next.add(songId);
+      return next;
+    });
+
+    try {
+      if (isLiked) {
+        await supabase
+          .from('user_likes')
+          .delete()
+          .eq('user_id', userId)
+          .eq('song_id', songId);
+      } else {
+        await supabase
+          .from('user_likes')
+          .insert({ user_id: userId, song_id: songId });
+      }
+    } catch (error) {
+      setLikedSongIds(prev => {
+        const next = new Set(prev);
+        if (isLiked) next.add(songId);
+        else next.delete(songId);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen pb-32">
@@ -140,7 +138,6 @@ const Home = () => {
       >
         <div className="absolute inset-0 gradient-hero opacity-80"></div>
         <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
-          {/* Show Login/Signup buttons if not authenticated */}
           {!isAuthenticated && (
             <div className="absolute top-8 right-8 flex gap-4">
               <Button variant="outline" onClick={() => navigate("/login")}>Login</Button>
@@ -163,18 +160,19 @@ const Home = () => {
       <section className="mb-12">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-3xl font-bold">Featured Today</h2>
-          <Button variant="ghost">View All</Button>
+          <Button variant="ghost" onClick={() => navigate('/library')}>View All</Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {songs.map((song, idx) => (
+          {allSongs.map((song) => (
             <SongCard
-              key={idx}
-              title={song.name}
-              artist={song.artist}
-              duration={""}
-              coverColor={"from-purple-600 to-pink-600"}
-              isLiked={likedSongsSet.has(song.url || song.name || String(idx))}
-              onLike={() => handleToggleLike(song, idx)}
+              key={song.id}
+              title={song.title}
+              artist={song.artists?.name || 'Unknown Artist'}
+              duration={`${Math.floor(song.duration / 60)}:${(song.duration % 60).toString().padStart(2, '0')}`}
+              coverColor={song.cover_color || "from-purple-600 to-pink-600"}
+              imageUrl={song.artists?.image_url}
+              isLiked={likedSongIds.has(song.id)}
+              onLike={() => handleToggleLike(song.id)}
               onPlay={() => handlePlay(song)}
             />
           ))}
@@ -185,7 +183,7 @@ const Home = () => {
       <section className="mb-12">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-3xl font-bold">Popular Playlists</h2>
-          <Button variant="ghost">View All</Button>
+          <Button variant="ghost" onClick={() => navigate('/playlists')}>View All</Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
@@ -232,14 +230,9 @@ const Home = () => {
           ))}
         </div>
       </section>
-      {/* Music Player for selected song */}
-      <MusicPlayer song={currentSong ? { title: currentSong.name, artist: currentSong.artist, audioUrl: currentSong.url } : undefined} />
+      <MusicPlayer song={currentSong} />
     </div>
   );
 };
 
 export default Home;
-
-function cn(...classes: string[]) {
-  return classes.filter(Boolean).join(' ');
-}
