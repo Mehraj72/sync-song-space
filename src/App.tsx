@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import SpotifyCallback from "./pages/SpotifyCallback";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
@@ -98,6 +99,7 @@ const App = () => {
               <Route path="/library" element={<Layout><Library /></Layout>} />
               <Route path="/playlists" element={<Layout><Playlists /></Layout>} />
               <Route path="/profile" element={<Layout><Profile /></Layout>} />
+              <Route path="/spotify-callback" element={<SpotifyCallback />} />
               <Route path="*" element={<NotFound />} />
             </>}
             {/* Admin routes */}
