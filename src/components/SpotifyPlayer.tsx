@@ -73,7 +73,7 @@ const SpotifyPlayer = ({ track, onNext, onPrevious, isLiked, onLike }: SpotifyPl
           {track.album?.images?.[0] && (
             <img 
               src={track.album.images[0].url} 
-              alt={track.name}
+              alt={`${track.name} album cover`}
               className="w-14 h-14 rounded"
             />
           )}
@@ -89,6 +89,7 @@ const SpotifyPlayer = ({ track, onNext, onPrevious, isLiked, onLike }: SpotifyPl
                 isLiked ? 'fill-primary text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={onLike}
+              aria-label={isLiked ? 'Unlike song' : 'Like song'}
             />
           )}
         </div>
@@ -99,11 +100,13 @@ const SpotifyPlayer = ({ track, onNext, onPrevious, isLiked, onLike }: SpotifyPl
             <SkipBack 
               className="w-5 h-5 cursor-pointer hover:text-primary transition-colors"
               onClick={onPrevious}
+              aria-label="Previous track"
             />
             <button
               onClick={togglePlay}
               className="w-10 h-10 rounded-full bg-primary flex items-center justify-center hover:scale-105 transition-transform"
               disabled={!track.preview_url}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
                 <Pause className="w-5 h-5 text-primary-foreground" />
@@ -114,6 +117,7 @@ const SpotifyPlayer = ({ track, onNext, onPrevious, isLiked, onLike }: SpotifyPl
             <SkipForward 
               className="w-5 h-5 cursor-pointer hover:text-primary transition-colors"
               onClick={onNext}
+              aria-label="Next track"
             />
           </div>
           <div className="w-full max-w-md">
@@ -127,19 +131,21 @@ const SpotifyPlayer = ({ track, onNext, onPrevious, isLiked, onLike }: SpotifyPl
                   audioRef.current.currentTime = (value[0] / 100) * audioRef.current.duration;
                 }
               }}
+              aria-label="Song progress"
             />
           </div>
         </div>
 
         {/* Volume */}
         <div className="flex items-center gap-2 flex-1 justify-end">
-          <Volume2 className="w-5 h-5" />
+          <Volume2 className="w-5 h-5" aria-label="Volume" />
           <Slider
             value={[volume]}
             max={100}
             step={1}
             className="w-24"
             onValueChange={(value) => setVolume(value[0])}
+            aria-label="Volume control"
           />
         </div>
       </div>

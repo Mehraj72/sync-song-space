@@ -16,7 +16,7 @@ serve(async (req) => {
     
     const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
     const clientSecret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
-    const redirectUri = `${new URL(req.url).origin}/spotify-callback`;
+    const redirectUri = `${Deno.env.get('VITE_SUPABASE_URL')}/functions/v1/spotify-callback`;
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {

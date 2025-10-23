@@ -12,7 +12,8 @@ serve(async (req) => {
 
   try {
     const clientId = Deno.env.get('SPOTIFY_CLIENT_ID');
-    const redirectUri = `${new URL(req.url).origin}/spotify-callback`;
+    // Use the frontend URL for redirect
+    const redirectUri = `${Deno.env.get('VITE_SUPABASE_URL')}/functions/v1/spotify-callback`;
     
     const scope = 'user-read-private user-read-email user-library-read user-top-read user-read-recently-played playlist-read-private playlist-read-collaborative streaming';
     

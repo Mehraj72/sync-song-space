@@ -137,7 +137,11 @@ const Dashboard = () => {
               >
                 <div className="flex items-center gap-4">
                   {track.album?.images?.[0] && (
-                    <img src={track.album.images[0].url} alt={track.name} className="w-16 h-16 rounded" />
+                    <img 
+                      src={track.album.images[0].url} 
+                      alt={`${track.name} by ${track.artists?.map((a: any) => a.name).join(', ')}`} 
+                      className="w-16 h-16 rounded" 
+                    />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{track.name}</p>
@@ -163,7 +167,11 @@ const Dashboard = () => {
               onClick={() => setCurrentTrack(item.track)}
             >
               {item.track?.album?.images?.[0] && (
-                <img src={item.track.album.images[0].url} alt={item.track.name} className="w-full aspect-square rounded mb-3" />
+                <img 
+                  src={item.track.album.images[0].url} 
+                  alt={`${item.track.name} album cover`} 
+                  className="w-full aspect-square rounded mb-3" 
+                />
               )}
               <p className="font-semibold text-sm truncate">{item.track?.name}</p>
               <p className="text-xs text-muted-foreground truncate">
@@ -181,7 +189,11 @@ const Dashboard = () => {
           {playlists.map((playlist) => (
             <div key={playlist.id} className="gradient-card p-4 rounded-lg hover:scale-[1.02] transition-transform cursor-pointer">
               {playlist.images?.[0] && (
-                <img src={playlist.images[0].url} alt={playlist.name} className="w-full aspect-square rounded mb-3" />
+                <img 
+                  src={playlist.images[0].url} 
+                  alt={`${playlist.name} playlist cover`} 
+                  className="w-full aspect-square rounded mb-3" 
+                />
               )}
               <p className="font-semibold truncate">{playlist.name}</p>
               <p className="text-sm text-muted-foreground">{playlist.tracks?.total} tracks</p>
@@ -197,7 +209,11 @@ const Dashboard = () => {
           {topArtists.map((artist) => (
             <div key={artist.id} className="gradient-card p-4 rounded-lg text-center hover:scale-105 transition-transform cursor-pointer">
               {artist.images?.[0] && (
-                <img src={artist.images[0].url} alt={artist.name} className="w-full aspect-square rounded-full mb-3" />
+                <img 
+                  src={artist.images[0].url} 
+                  alt={`${artist.name} artist photo`} 
+                  className="w-full aspect-square rounded-full mb-3" 
+                />
               )}
               <p className="font-semibold text-sm truncate">{artist.name}</p>
             </div>
